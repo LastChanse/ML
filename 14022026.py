@@ -27,6 +27,9 @@ Y = X * w
 w = F+ * Y
 
 F+ = inv(transpose(F) * F) * transpose(F) # Псевдо обратная матрица
+E(w)=sum((ti-yi)^2) / N
+error = np.sum((t - Y) ** 2) / N
+    
 '''
 
 def demo():
@@ -48,7 +51,16 @@ def demo():
     x = np.linspace(0, 1, N)
     z = 20 * np.sin(2 * np.pi * 3 * x) + 100 * np.exp(x)
 
+def calculateY(x,M,t):
+    F = []
+    for i in range(0, M + 1):
+        F.append(np.pow(x, i))
+    F = np.array(F).T
 
+    F_plus = np.linalg.inv(F.T @ F) @ F.T
+    w = F_plus @ t
+    Y = F @ w
+    return Y
 def HW1():
     print("start")
     N = 1000 # кол-во элементов в обучающей выборке
@@ -58,41 +70,67 @@ def HW1():
     t = z + error
 
     # M - макс степень полинома
-    '''
-    M = 1 => M = 1-y = w0+w1*x
-    M = 2 => M = 2-y = w0+w1*x+w2*x^2
-    ...
-    M = 100 => M = 100-y = w0+w1*x+w2*x^2+...+w100*x^100
-    для каждой регрессии матрицу плана
-    (лучше делать накопление этой матрицы чтобы не пересчитывать т е на подобии M2=M1+w2*x^2 и т д)
-    '''
-    # 1 В одном графическом окне построить график функции z(x) в виде непрерывной кривой, t(x) в виде точек и решения задачи регрессии в виде непрерывной кривой для M = 1
-    M = 3
-    F = []
-    x = [1,3,5]
-    for i in range(0,M+1):
-        F.append(np.pow(x,i))
-    F = np.array(F).T
+    fig, axes = plt.subplots(2, 2)
 
-    F_plus = np.linalg.inv(x.T*x)*x.T
-    print(pd.DataFrame(F))
-    print(pd.DataFrame(F_plus))
+    # 1 В одном графическом окне построить график функции z(x) в виде непрерывной кривой, t(x) в виде точек и решения задачи регрессии в виде непрерывной кривой для M = 1
+    M = 1
+    Y1 = calculateY(x,M,t)
+
+    axes[0, 0].plot(x, z, 'g-', linewidth=2, label='z(x)')
+    axes[0, 0].scatter(x, t, c='blue', s=10, alpha=0.5, label='t(x)')
+    axes[0, 0].plot(x, Y1, 'r--', linewidth=2, label=f'M=1')
+    axes[0, 0].set_xlabel('Значения x')
+    axes[0, 0].set_ylabel('Значения функций')
+    axes[0, 0].set_title(f'M = 1')
+    axes[0, 0].legend()
+    axes[0, 0].grid(True)
+
     # 2 В одном графическом окне построить график функции z(x) в виде непрерывной кривой, t(x) в виде точек и решения задачи регрессии в виде непрерывной кривой для M = 8
+    M = 8
+    Y2 = calculateY(x,M,t)
+
+    axes[0, 1].plot(x, z, 'g-', linewidth=2, label='z(x)')
+    axes[0, 1].scatter(x, t, c='blue', s=10, alpha=0.5, label='t(x)')
+    axes[0, 1].plot(x, Y2, 'r--', linewidth=2, label=f'M=8')
+    axes[0, 1].set_xlabel('Значения x')
+    axes[0, 1].set_ylabel('Значения функций')
+    axes[0, 1].set_title(f'M = 8')
+    axes[0, 1].legend()
+    axes[0, 1].grid(True)
+
     # 3 В одном графическом окне построить график функции z(x) в виде непрерывной кривой, t(x) в виде точек и решения задачи регрессии в виде непрерывной кривой для M = 100
+    M = 100
+    Y3 = calculateY(x,M,t)
+
+    axes[1, 0].plot(x, z, 'g-', linewidth=2, label='z(x)')
+    axes[1, 0].scatter(x, t, c='blue', s=10, alpha=0.5, label='t(x)')
+    axes[1, 0].plot(x, Y3, 'r--', linewidth=2, label=f'M=100')
+    axes[1, 0].set_xlabel('Значения x')
+    axes[1, 0].set_ylabel('Значения функций')
+    axes[1, 0].set_title(f'M = 100')
+    axes[1, 0].legend()
+    axes[1, 0].grid(True)
+
     # 4 Построить график зависимости ошибки E(w) от степени полинома M. M меняется от 1 до 100.
     # sum((ti-yi)^2) / N # средне квадратичная ошибка (Y)
-    # 0..M # Степени полинома (X)
+    # 1..M # Степени полинома (X)
 
-    fig, axes = plt.subplots(2, 2)
-    # axes[0,0].plot(x, z)
-    # axes[0,0].legend("zt")
-    # axes[0,0].subplot(0,1)
-    # axes[0,1].scatter(x, t, color='r')
-    # axes[0,1].legend("zt")
-    # plt.plot(x, t)
-    # fig.show()
+    E = []
+    m = [i for i in range(1,101)]
+    for M in m:
+        Y = calculateY(x, M, t)
+        E.append(np.sum((t - Y) ** 2) / N)
+
+    axes[1, 1].plot(m, E, 'r--', linewidth=2, label=f'E(w)')
+    axes[1, 1].set_xlabel('Степень полинома M')
+    axes[1, 1].set_ylabel('Ошибка')
+    axes[1, 1].set_title('Зависимость ошибки от M')
+    axes[1, 1].legend()
+    axes[1, 1].grid(True)
+    plt.tight_layout()
+    plt.show(block=True)
     print("done")
 
-if __name__ == "main":
+if __name__ == "__main__":
     HW1()
     # demo()
