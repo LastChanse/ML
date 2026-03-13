@@ -64,27 +64,31 @@ def calculateY2(x, t, Fbase, lambdas, trainPercent, testPercent, validationPerce
     best_w = None
     best_F_test = None
     best_t_test = None
+    best_F_idx = None
 
-    # F(0)=1
-    F = [np.ones_like(x)]
+    # Перемешивание индексов
+    index_list = np.random.permutation(N)
 
-    for f in Fbase:
-        F.append(f(x))
+    train_end_idx = int(N * trainPercent)
+    validation_end_idx = train_end_idx + int(N * validationPercent)
+    test_end_idx = validation_end_idx + int(N * testPercent)
 
-    F = np.array(F).T
-
+    train_idxs = index_list[:train_end_idx]
+    validation_idxs = index_list[train_end_idx:validation_end_idx]
+    test_idxs = index_list[validation_end_idx:test_end_idx]
     # Подбираем лучшие параметры модели по Монте-Карло
     for i in range(0, 100):
-        # Перемешивание индексов
-        index_list = np.random.permutation(N)
+        # F(0)=1
+        F = [np.ones_like(x)]
+        F_rand_list = np.random.choice(Fbase, size=10, replace=False)
+        F_rand_idx = []
+        for f in F_rand_list:
+            F.append(f(x))
+            for k in range(len(Fbase)):
+                if (Fbase[k]==f):
+                    F_rand_idx.append(k)
 
-        train_end_idx = int(N * trainPercent)
-        validation_end_idx = train_end_idx + int(N * validationPercent)
-        test_end_idx = validation_end_idx + int(N * testPercent)
-
-        train_idxs = index_list[:train_end_idx]
-        validation_idxs = index_list[train_end_idx:validation_end_idx]
-        test_idxs = index_list[validation_end_idx:test_end_idx]
+        F = np.array(F).T
 
         F_train, t_train = F[train_idxs], t[train_idxs]
         F_validation, t_validation = F[validation_idxs], t[validation_idxs]
@@ -96,7 +100,7 @@ def calculateY2(x, t, Fbase, lambdas, trainPercent, testPercent, validationPerce
             w_train = calculateW(F_train, t_train, l);
 
             # Валидацию параметров на validation части
-            E = calculateE(F_validation, t_validation, w_train) # вычисляем ошибку
+            E = calculateE(F_validation, t_validation, w_train, l, N) # вычисляем ошибку
 
             # Выбираем лучшие параметры для test части
             if E < best_E:
@@ -105,9 +109,10 @@ def calculateY2(x, t, Fbase, lambdas, trainPercent, testPercent, validationPerce
                 best_l = l
                 best_F_test = F_test
                 best_t_test = t_test
+                best_F_idx = F_rand_idx.copy()
 
     # На лучших подобранных параметрах вычисляем ошибку на test части.
-    best_test_E = calculateE(best_F_test, best_t_test, best_w)
+    best_test_E = calculateE(best_F_test, best_t_test, best_w, best_l, N)
     '''
     Значение ошибки на test части, 
     лучшего коэффициента регуляризации и
@@ -118,13 +123,17 @@ def calculateY2(x, t, Fbase, lambdas, trainPercent, testPercent, validationPerce
     # Ищем список лучших функций
     best_functions = ["1"]
 
-    for i in range(len(Fbase_names)):
-        # Проверяем наличие вклада (чем выше параметр тем значительнее вклад функции)
-        if abs(best_w[i + 1]) > 1e-6: # i+1 так как Fbase_names без F(0)='1', а best_w с 1
-            best_functions.append(Fbase_names[i])
+    for i in best_F_idx:
+        best_functions.append(Fbase_names[i])
 
     print("Набор лучших базисных функций:", best_functions)
 
+    F = [np.ones_like(x)]
+
+    for i in best_F_idx:
+        F.append(Fbase[i](x))
+
+    F = np.array(F).T
     # Возвращаем регрессию для графика
     Y = F @ best_w
     return Y
@@ -138,9 +147,10 @@ def calculateW(F,t,l):
     return w
 
 # Вычисление ошибки
-def calculateE(F,t,w):
+def calculateE(F,t,w, l, N):
     Y = F @ w
-    error = np.mean((t - Y) ** 2)
+    # 1/2 (SUM<1,n>(ti-yi)^2+a*SUM<1,k>|wi|^2)
+    error = (np.sum((t - Y) ** 2) + l * np.sum(w ** 2)) / N
     return error
 
 def HW2():
@@ -152,14 +162,14 @@ def HW2():
 
     # Базисные функции
     # Полиномы
-    Xstart, Xend = 1,11
-    X = [lambda x, i=i: x ** i for i in range(Xstart, Xend)] # x,x^2,...x^10
+    Xstart, Xend = 1,21
+    X = [lambda x, i=i: x ** i for i in range(Xstart, Xend)] # x,x^2,...x^20
     X_names = [f"x^{i}" for i in range(Xstart, Xend)]
 
     Fbase = X+[np.cos, np.sin, np.exp, np.sqrt]
-    Fbase_names = ["cos", "sin", "exp", "sqrt"] + X_names
+    Fbase_names = X_names+["cos", "sin", "exp", "sqrt"]
 
-    lambdas = {0, 0.0001, 0.001, 0.01, 0.1, 0.5, 1, 5, 10, 50, 100, 500, 1000}
+    lambdas = {0.00001, 0.000001, 0.0000001, 0.00000001, 0.000000001, 0.0000000001, 0.00000000001}
 
     trainPercent, testPercent, validationPercent = 0.8, 0.1, 0.1
 
@@ -169,10 +179,10 @@ def HW2():
     t(x) в виде точек и график регрессии в виде непрерывной кривой, полученной на лучших параметрах модели.
     '''
     my_plot1 = plt  # axes[0, 0]
-
-    my_plot1.plot(x, z, 'g-', linewidth=2, label='z(x)')
+    my_plot1.plot(x, z, 'y-', linewidth=5, label='z(x)')
     my_plot1.scatter(x, t, c='blue', s=10, alpha=0.5, label='t(x)')
     my_plot1.plot(x, Y, 'r-', linewidth=2, label=f'best Y')
+
     my_plot1.legend()
     my_plot1.grid(True)
 
