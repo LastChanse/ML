@@ -4,150 +4,125 @@ warnings.filterwarnings("ignore")
 
 import numpy as np
 import matplotlib.pyplot as plt
-
 import matplotlib
 
 matplotlib.use('TkAgg')
 
-LAMBDA = 0.1
 
+# Стандартизация
 def standardize(X):
+    X = np.array(X)
     mean = X.mean(axis=0)
     std = X.std(axis=0)
-    std[std == 0] = 1
-    return (X - mean) / std, mean, std
+    return (X - mean) / std
 
 
-def compute_loss(X, y, w, l):
-    N = len(y)
-    y_pred = X @ w
-    return (1 / (2 * N)) * np.sum((y - y_pred) ** 2) + (l / 2) * np.sum(w ** 2)
+# Полиномиальные признаки
+def polynomial_features(X, degree):
+    X_poly = X.copy()
+    for d in range(2, degree + 1):
+        X_poly = np.hstack((X_poly, X ** d))
+    return X_poly
 
 
-def gradient_descent(X, y, l, lr=0.01, max_iter=1000, tol_grad=1e-6, tol_w=1e-6):
-    N, D = X.shape
+# Функция ошибки
+# def compute_loss(F, t, w, alpha):
+#     return 0.5 * np.sum((t - F @ w) ** 2) + (alpha / 2) * np.sum(w ** 2)
+def compute_loss(F, t, w, alpha):
+    return (1/len(F)) * np.sum((t - F @ w) ** 2)
 
-    # случайная инициализация весов из нормального распределения
+
+# Градиентный спуск
+def gradient_descent(F, t, alpha, lr=1e-5, max_iter=1000):
+    N, D = F.shape
+
     w = np.random.normal(0, 0.1, size=D)
 
     losses = []
 
     for i in range(max_iter):
-        y_pred = X @ w
-        grad = -(1 / N) * (X.T @ (y - y_pred)) + l * w
+        # градиент по формуле:
+        # -F^T t + F^T F w + alpha w
+        grad = -(F.T @ t) + (F.T @ F) @ w + alpha * w
 
-        w_new = w - lr * grad
+        w = w - lr * grad
 
-        # критерии остановки
-        if np.linalg.norm(grad) < tol_grad:
-            print(f"Остановка по норме градиента на итерации {i}")
-            break
-
-        if np.linalg.norm(w_new - w) < tol_w:
-            print(f"Остановка по изменению весов на итерации {i}")
-            break
-
-        w = w_new
-
-        loss = compute_loss(X, y, w, l)
+        loss = compute_loss(F, t, w, alpha)
         losses.append(loss)
 
     return w, losses
 
 
+# Основная функция
 def HW3():
-    np.random.seed(42)
-
-    boston = load_boston()
-    X = boston.data
-    y = boston.target
-
-    # стандартизация данных
-    X, mean, std = standardize(X)
-
-    # добавляем bias
-    X = np.c_[np.ones(len(X)), X]
+    data = load_boston()
+    X = data.data
+    t = data.target
 
     N = len(X)
-    trainPercent, testPercent, validationPercent = 0.8, 0.1, 0.1
 
-    index_list = np.random.permutation(N)
+    # перемешивание
+    idx = np.random.permutation(N)
 
     train_end = int(0.8 * N)
     val_end = int(0.9 * N)
 
-    train_idxs = index_list[:train_end]
-    validation_idxs = index_list[train_end:val_end]
-    test_idxs = index_list[val_end:]
-    degrees = [1, 2, 3]
-    lambdas = [0, 0.01, 0.1, 1]
+    train_idx = idx[:train_end]
+    val_idx = idx[train_end:val_end]
+    test_idx = idx[val_end:]
 
-    best_model = None
-    best_params = None
+    degrees = [1, 2, 3]
+    alphas = [0]
+
     best_E = np.inf
+    best_model = None
 
     for degree in degrees:
-        # создаём новые признаки
-        X_poly = polynomial_features(boston.data, degree)
+        # признаки
+        F = polynomial_features(X, degree)
 
         # стандартизация
-        X_poly, mean, std = standardize(X_poly)
+        F = standardize(F)
+        t = standardize(t)
 
-        # добавляем bias
-        X_poly = np.c_[np.ones(len(X_poly)), X_poly]
+        # добавляем F0=[1,1,1,1,1...]
+        F = np.c_[np.ones(len(F)), F]
 
-        # разбиение
-        X_train = X_poly[train_idxs]
-        y_train = y[train_idxs]
+        F_train = F[train_idx]
+        t_train = t[train_idx]
 
-        X_val = X_poly[validation_idxs]
-        y_val = y[validation_idxs]
+        F_val = F[val_idx]
+        t_val = t[val_idx]
 
-        X_test_local = X_poly[test_idxs]
-        y_test_local = y[test_idxs]
+        F_test = F[test_idx]
+        t_test = t[test_idx]
 
-        losses = []
-        for l in lambdas:
-            # шаг learning rate ~0.01
-            w, losses = gradient_descent(X_train, y_train, l, lr=0.01)
+        for alpha in alphas:
+            w, losses = gradient_descent(F_train, t_train, alpha)
 
-            E_val = compute_loss(X_val, y_val, w, l)
+            E_val = compute_loss(F_val, t_val, w, alpha)
 
             if E_val < best_E:
                 best_E = E_val
-                best_model = (w, degree, l)
-                best_params = (degree, l)
-                best_test_data = (X_test_local, y_test_local)
-    w, degree, l = best_model
-    X_test_best, y_test_best = best_test_data
+                best_model = (w, degree, alpha, F_test, t_test, losses)
 
-    test_error = compute_loss(X_test_best, y_test_best, w, l)
+    w, degree, alpha, F_test, t_test, losses = best_model
+
+    test_error = compute_loss(F_test, t_test, w, alpha)
 
     print("\n=== ЛУЧШАЯ МОДЕЛЬ ===")
     print("Степень полинома:", degree)
-    print("Lambda:", l)
-    print("Ошибка на обучающей выборке:", best_E)
-    print("Ошибка на тестовой выборке:", test_error)
+    print("alpha:", alpha)
+    print("Ошибка (val):", best_E)
+    print("Ошибка (test):", test_error)
 
-    # график ошибки
+    # график
     plt.plot(losses)
     plt.xlabel("Итерация")
     plt.ylabel("Ошибка")
-    plt.title("Сходимость градиентного спуска")
+    plt.title("Сходимость GD (теоретическая форма)")
     plt.show()
 
-    return w
-
-# Генерация полиномиальных признаков
-def polynomial_features(X, degree):
-    X_poly = X.copy()
-
-    for d in range(2, degree + 1):
-        X_poly = np.hstack((X_poly, X ** d))
-
-    return X_poly
 
 if __name__ == "__main__":
-    print("start")
     HW3()
-    print("done")
