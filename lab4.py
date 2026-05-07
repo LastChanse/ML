@@ -27,17 +27,17 @@ TP, TN, FP, FN, Accuracy, Precision, Recall, F1-score, ошибки 1-го и 2-
 
 def calculateAll(t,y,idx):
     y_pred = np.array(y)
-    t_true = np.array([t[idx[i]] for i in range(len(t))])
+    t_true = np.array(t)[idx]
     TP = np.sum((y_pred == 1) & (t_true == 1))
     TN = np.sum((y_pred == 0) & (t_true == 0))
     FP = np.sum((y_pred == 1) & (t_true == 0))
     FN = np.sum((y_pred == 0) & (t_true == 1))
-    Accuracy = (TP + TN) / (TP + TN + FP + FN) if TP + TN + FP + FN > 0 else 0
-    Precision = TP / (TP + FP) if (TP + FP) > 0 else 0
-    Recall = TP / (TP + FN) if (TP + FN) > 0 else 0
-    F1_score = 2 * (Precision * Recall) / (Precision + Recall) if (Precision + Recall) > 0 else 0
-    alpha = FP / (FP + TN) if (FP + TN) > 0 else 0
-    beta = FN / (FN + TP) if (FN + TP) > 0 else 0
+    Accuracy = (TP + TN) / (TP + TN + FP + FN)
+    Precision = TP / (TP + FP)
+    Recall = TP / (TP + FN)
+    F1_score = 2 * (Precision * Recall) / (Precision + Recall)
+    alpha = FP / (FP + TN)
+    beta = FN / (FN + TP)
     return TP, TN, FP, FN, Accuracy, Precision, Recall, F1_score, alpha, beta
 
 def printAll(TP, TN, FP, FN, Accuracy, Precision, Recall, F1_score, alpha, beta):
@@ -45,7 +45,6 @@ def printAll(TP, TN, FP, FN, Accuracy, Precision, Recall, F1_score, alpha, beta)
 
 # Основная функция
 def AUC(RecallMas, alphaMas):
-    data = sorted(zip(alphaMas, RecallMas))
     data = sorted(zip(alphaMas, RecallMas))
     x, y = zip(*data)
 
@@ -60,21 +59,20 @@ def AUC(RecallMas, alphaMas):
 def HW4():
     N = 1000
     # Футболисты
-    mu_0 = 180   # Среднее
-    sigma_0 = 10 # Стандартное отклонение
+    mu_0 = 175   # Среднее
+    sigma_0 = 8  # Стандартное отклонение
     rost_fut = np.random.normal(mu_0, sigma_0, N)
     # Баскетболисты
-    mu_1 = 190   # Среднее
-    sigma_1 = 14 # Стандартное отклонение
+    mu_1 = 195   # Среднее
+    sigma_1 = 8  # Стандартное отклонение
     rost_bas = np.random.normal(mu_1, sigma_1, N)
 
     # 0 футболист, 1 баскетболист
     def classificator(rost, T):
-        return 0 if rost < T else 1
+        return (rost[idx] >= T).astype(int)
 
     X = np.append(rost_fut, rost_bas)
     t = [0]*len(rost_fut)+[1]*len(rost_bas)
-    print(len(X), len(t))
     # перемешивание
     idx = np.random.permutation(N*2)
     T = int(max(X))
@@ -83,17 +81,16 @@ def HW4():
     RecallMas = []
     alphaMas = []
     TMas = []
-    for Tval in range(int(min(X)),T):
-        y = []
-        for i in idx:
-            y.append(classificator(X[i],Tval))
+    # Tbest = 0
+    for Tval in np.arange(int(min(X)),T,0.1):
+        y = classificator(X,Tval)
         _TP, _TN, _FP, _FN, _Accuracy, _Precision, _Recall, _F1_score, _alpha, _beta = calculateAll(t,y,idx)
         RecallMas.append(_Recall)
         alphaMas.append(_alpha)
         TMas.append(Tval)
-        printAll(TP, TN, FP, FN, Accuracy, Precision, Recall, F1_score, alpha, beta);
 
         if _Accuracy > AccuracyBest:
+            # Tbest = Tval
             AccuracyBest = _Accuracy
             TP, TN, FP, FN, Accuracy, Precision, Recall, F1_score, alpha, beta = _TP, _TN, _FP, _FN, _Accuracy, _Precision, _Recall, _F1_score, _alpha, _beta
 
@@ -102,8 +99,12 @@ def HW4():
 
     print("Площадь AUC:", AUC(RecallMas,alphaMas))
 
+    # print("Лучший порог T",Tbest)
+
+    data = sorted(zip(alphaMas, RecallMas))
+    x, y = zip(*data)
     # график ROC
-    plt.plot(alphaMas,RecallMas)
+    plt.plot(x,y)
     plt.title("ROC")
     plt.show()
 
